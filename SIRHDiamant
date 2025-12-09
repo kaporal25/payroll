@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Application Web de Gestion RH</title>
+    <!-- Bootstrap CDN pour CSS responsive -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"></script>
+    <!-- SheetJS pour import/export Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* Styles personnalisés pour responsive et modernité */
+        body { font-family: Arial, sans-serif; }
+        .hidden { display: none; }
+        .notification { position: fixed; top: 20px; right: 20px; z-index: 1000; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Gestion RH</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item"><a class="nav-link" href="#" onclick="showSection('auth')">Authentification</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#" onclick="showSection('employees')">Employés</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#" onclick="showSection('attendance')">Présences</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#" onclick="showSection('payroll')">Paie</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#" onclick="showSection('leaves')">Congés</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#" onclick="showSection('performance')">Performances</a></li>
+                    <li class="nav-item"><a class="nav-link" href="#" onclick="logout()">Déconnexion</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Notification area -->
+        <div id="notifications" class="notification"></div>
+
+        <!-- Section Authentification -->
+        <section id="auth" class="">
+            <h2>Authentification</h2>
+            <form id="loginForm">
+                <div class="mb-3">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" class="form-control" id="email" required>
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">Mot de passe</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Se connecter</button>
+            </form>
+            <button class="btn btn-secondary mt-2" onclick="registerUser()">S'inscrire</button>
+        </section>
+
+        <!-- Section Gestion Employés -->
+        <section id="employees" class="hidden">
+            <h2>Gestion des Employés</h2>
+            <form id="employeeForm">
+                <div class="mb-3">
+                    <label for="matricule" class="form-label">Matricule (unique)</label>
+                    <input type="text" class="form-control" id="matricule" required>
+                </div>
+                <div class="mb-3">
+                    <label for="name" class="form-label">Nom</label>
+                    <input type="text" class="form-control" id="name" required>
+                </div>
+                <!-- Ajoutez d'autres champs comme email, poste, etc. -->
+                <button type="button" class="btn btn-primary" onclick="addEmployee()">Ajouter/Modifier</button>
+                <button type="button" class="btn btn-danger" onclick="deleteEmployee()">Supprimer</button>
+            </form>
+            <input type="text" id="searchMatricule" placeholder="Rechercher par matricule" class="form-control mt-3">
+            <table class="table table-striped mt-3" id="employeesTable">
+                <thead><tr><th>Matricule</th><th>Nom</th><th>Actions</th></tr></thead>
+                <tbody></tbody>
+            </table>
+            <button class="btn btn-info" onclick="exportToExcel('employees')">Exporter Excel</button>
+            <input type="file" id="importEmployees" accept=".xlsx" onchange="importFromExcel('employees')">
+        </section>
+
+        <!-- Section Présences et Absences -->
+        <section id="attendance" class="hidden">
+            <h2>Gestion des Présences</h2>
+            <form id="attendanceForm">
+                <div class="mb-3">
+                    <label for="attMatricule" class="form-label">Matricule</label>
+                    <input type="text" class="form-control" id="attMatricule" required>
+                </div>
+                <div class="mb-3">
+                    <label for="date" class="form-label">Date</label>
+                    <input type="date" class="form-control" id="date" required>
+                </div>
+                <div class="mb-3">
+                    <label for="status" class="form-label">Statut (présent/absent)</label>
+                    <select class="form-control" id="status"><option>présent</option><option>absent</option></select>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="addAttendance()">Enregistrer</button>
+            </form>
+            <table class="table table-striped mt-3" id="attendanceTable">
+                <thead><tr><th>Matricule</th><th>Date</th><th>Statut</th></tr></thead>
+                <tbody></tbody>
+            </table>
+            <button class="btn btn-info" onclick="exportToExcel('attendance')">Exporter Excel</button>
+            <input type="file" id="importAttendance" accept=".xlsx" onchange="importFromExcel('attendance')">
+        </section>
+
+        <!-- Section Paie -->
+        <section id="payroll" class="hidden">
+            <h2>Gestion de la Paie</h2>
+            <form id="payrollForm">
+                <div class="mb-3">
+                    <label for="payMatricule" class="form-label">Matricule</label>
+                    <input type="text" class="form-control" id="payMatricule" required>
+                </div>
+                <div class="mb-3">
+                    <label for="period" class="form-label">Période (ex: 2023-01)</label>
+                    <input type="text" class="form-control" id="period" required>
+                </div>
+                <div class="mb-3">
+                    <label for="salary" class="form-label">Salaire de base</label>
+                    <input type="number" class="form-control" id="salary" required>
+                </div>
+                <!-- Calcul simplifié : total = salary + primes -->
+                <button type="button" class="btn btn-primary" onclick="addPayroll()">Calculer et Enregistrer</button>
+            </form>
+            <button class="btn btn-warning" onclick="closePayrollPeriod()">Clôturer Période</button>
+            <table class="table table-striped mt-3" id="payrollTable">
+                <thead><tr><th>Matricule</th><th>Période</th><th>Salaire</th><th>Statut</th></tr></thead>
+                <tbody></tbody>
+            </table>
+            <button class="btn btn-info" onclick="exportToExcel('payroll')">Exporter Excel</button>
+            <input type="file" id="importPayroll" accept=".xlsx" onchange="importFromExcel('payroll')">
+        </section>
+
+        <!-- Section Congés -->
+        <section id="leaves" class="hidden">
+            <h2>Gestion des Congés</h2>
+            <form id="leaveForm">
+                <div class="mb-3">
+                    <label for="leaveMatricule" class="form-label">Matricule</label>
+                    <input type="text" class="form-control" id="leaveMatricule" required>
+                </div>
+                <div class="mb-3">
+                    <label for="startDate" class="form-label">Date de début</label>
+                    <input type="date" class="form-control" id="startDate" required>
+                </div>
+                <div class="mb-3">
+                    <label for="endDate" class="form-label">Date de fin</label>
+                    <input type="date" class="form-control" id="endDate" required>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="requestLeave()">Demander</button>
+                <button type="button" class="btn btn-success" onclick="approveLeave()">Approuver</button>
+            </form>
+            <table class="table table-striped mt-3" id="leavesTable">
+                <thead><tr><th>Matricule</th><th>Début</th><th>Fin</th><th>Statut</th><th>Solde</th></tr></thead>
+                <tbody></tbody>
+            </table>
+            <button class="btn btn-info" onclick="generateLeaveReport()">Générer État Global</button>
+            <button class="btn btn-info" onclick="exportToExcel('leaves')">Exporter Excel</button>
+            <input type="file" id="importLeaves" accept=".xlsx" onchange="importFromExcel('leaves')">
+        </section>
+
+        <!-- Section Performances -->
+        <section id="performance" class="hidden">
+            <h2>Gestion des Performances</h2>
+            <form id="performanceForm">
+                <div class="mb-3">
+                    <label for="perfMatricule" class="form-label">Matricule</label>
+                    <input type="text" class="form-control" id="perfMatricule" required>
+                </div>
+                <div class="mb-3">
+                    <label for="semester" class="form-label">Semestre (ex: 2023-S1)</label>
+                    <input type="text" class="form-control" id="semester" required>
+                </div>
+                <div class="mb-3">
+                    <label for="note" class="form-label">Note (0-10)</label>
+                    <input type="number" class="form-control" id="note" required>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="addPerformance()">Enregistrer</button>
+            </form>
+            <table class="table table-striped mt-3" id="performanceTable">
+                <thead><tr><th>Matricule</th><th>Semestre</th><th>Note</th></tr></thead>
+                <tbody></tbody>
+            </table>
+            <button class="btn btn-info" onclick="exportToExcel('performance')">Exporter Excel</button>
+            <input type="file" id="importPerformance" accept=".xlsx" onchange="importFromExcel('performance')">
+        </section>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+
+    <script>
+        // Configuration Firebase (Remplacez par vos propres clés depuis la console Firebase)
+        const firebaseConfig = {
+            apiKey: "VOTRE_API_KEY",
+            authDomain: "VOTRE_PROJET.firebaseapp.com",
+            projectId: "VOTRE_PROJET_ID",
+            storageBucket: "VOTRE_PROJET.appspot.com",
+            messagingSenderId: "VOTRE_SENDER_ID",
+            appId: "VOTRE_APP_ID"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let currentUser = null;
+        let userRole = 'employee'; // Par défaut, à déterminer via Firestore
+
+        // Fonction pour afficher les sections en fonction du rôle
+        function showSection(sectionId) {
+            document.querySelectorAll('section').forEach(sec => sec.classList.add('hidden'));
+            document.getElementById(sectionId).classList.remove('hidden');
+            // Charger données pour la section
+            if (sectionId === 'employees') loadEmployees();
+            if (sectionId === 'attendance') loadAttendance();
+            if (sectionId === 'payroll') loadPayroll();
+            if (sectionId === 'leaves') loadLeaves();
+            if (sectionId === 'performance') loadPerformance();
+        }
+
+        // Authentification
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            auth.signInWithEmailAndPassword(email, password).then(userCredential => {
+                currentUser = userCredential.user;
+                // Récupérer rôle depuis Firestore
+                db.collection('users').doc(currentUser.uid).get().then(doc => {
+                    userRole = doc.data().role || 'employee';
+                    showSection('employees'); // Afficher première section après login
+                    showNotification('Connexion réussie comme ' + userRole);
+                });
+            }).catch(error => showNotification('Erreur: ' + error.message));
+        });
+
+        function registerUser() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            auth.createUserWithEmailAndPassword(email, password).then(userCredential => {
+                currentUser = userCredential.user;
+                // Enregistrer rôle par défaut
+                db.collection('users').doc(currentUser.uid).set({ role: 'employee' });
+                showNotification('Inscription réussie');
+            }).catch(error => showNotification('Erreur: ' + error.message));
+        }
+
+        function logout() {
+            auth.signOut().then(() => {
+                currentUser = null;
+                showSection('auth');
+            });
+        }
+
+        // Vérifier auth state
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                currentUser = user;
+                showSection('employees');
+            } else {
+                showSection('auth');
+            }
+        });
+
+        // Fonctions pour Employés
+        function addEmployee() {
+            if (userRole !== 'admin' && userRole !== 'manager') return showNotification('Accès refusé');
+            const matricule = document.getElementById('matricule').value;
+            const name = document.getElementById('name').value;
+            db.collection('employees').doc(matricule).set({ name }).then(() => {
+                showNotification('Employé ajouté/modifié');
+                loadEmployees();
+            });
+        }
+
+        function deleteEmployee() {
+            if (userRole !== 'admin') return showNotification('Accès refusé');
+            const matricule = document.getElementById('matricule').value;
+            db.collection('employees').doc(matricule).delete().then(() => {
+                showNotification('Employé supprimé');
+                loadEmployees();
+            });
+        }
+
+        function loadEmployees() {
+            const tableBody = document.querySelector('#employeesTable tbody');
+            tableBody.innerHTML = '';
+            db.collection('employees').get().then(snapshot => {
+                snapshot.forEach(doc => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${doc.id}</td><td>${doc.data().name}</td><td><button onclick="editEmployee('${doc.id}')">Modifier</button></td>`;
+                    tableBody.appendChild(tr);
+                });
+            });
+        }
+
+        // Recherche (simplifiée)
+        document.getElementById('searchMatricule').addEventListener('input', (e) => {
+            const search = e.target.value;
+            // Filtrer table (implémentation client-side simple)
+        });
+
+        // Fonctions similaires pour autres sections (Présences, Paie, Congés, Performances)
+        // Exemple pour Présences
+        function addAttendance() {
+            if (userRole === 'employee') return showNotification('Accès refusé');
+            const matricule = document.getElementById('attMatricule').value;
+            const date = document.getElementById('date').value;
+            const status = document.getElementById('status').value;
+            db.collection('attendance').add({ matricule, date, status }).then(() => {
+                showNotification('Présence enregistrée');
+                loadAttendance();
+            });
+        }
+
+        function loadAttendance() {
+            const tableBody = document.querySelector('#attendanceTable tbody');
+            tableBody.innerHTML = '';
+            db.collection('attendance').get().then(snapshot => {
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${data.matricule}</td><td>${data.date}</td><td>${data.status}</td>`;
+                    tableBody.appendChild(tr);
+                });
+            });
+        }
+
+        // Pour Paie : Calcul simplifié
+        function addPayroll() {
+            if (userRole !== 'admin') return showNotification('Accès refusé');
+            const matricule = document.getElementById('payMatricule').value;
+            const period = document.getElementById('period').value;
+            const salary = parseFloat(document.getElementById('salary').value);
+            const total = salary + (salary * 0.1); // Prime 10% simplifiée
+            db.collection('payroll').doc(`${matricule}_${period}`).set({ matricule, period, salary: total, status: 'ouvert' }).then(() => {
+                showNotification('Paie calculée');
+                loadPayroll();
+            });
+        }
+
+        function closePayrollPeriod() {
+            if (userRole !== 'admin') return showNotification('Accès refusé');
+            const period = prompt('Période à clôturer:');
+            db.collection('payroll').where('period', '==', period).get().then(snapshot => {
+                const batch = db.batch();
+                snapshot.forEach(doc => batch.update(doc.ref, { status: 'clôturé' }));
+                batch.commit().then(() => showNotification('Période clôturée'));
+                // Archivage : Peut copier dans une collection 'archives'
+            });
+        }
+
+        function loadPayroll() {
+            const tableBody = document.querySelector('#payrollTable tbody');
+            tableBody.innerHTML = '';
+            db.collection('payroll').get().then(snapshot => {
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${data.matricule}</td><td>${data.period}</td><td>${data.salary}</td><td>${data.status}</td>`;
+                    tableBody.appendChild(tr);
+                });
+            });
+        }
+
+        // Congés : Demande et approbation
+        function requestLeave() {
+            const matricule = document.getElementById('leaveMatricule').value;
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+            db.collection('leaves').add({ matricule, start, end, status: 'en attente', solde: 0 }).then(() => {
+                showNotification('Demande de congé envoyée');
+                loadLeaves();
+            });
+        }
+
+        function approveLeave() {
+            if (userRole !== 'manager') return showNotification('Accès refusé');
+            const matricule = document.getElementById('leaveMatricule').value;
+            // Logique d'approbation (simplifiée : update dernier en attente)
+            db.collection('leaves').where('matricule', '==', matricule).where('status', '==', 'en attente').limit(1).get().then(snapshot => {
+                snapshot.forEach(doc => doc.ref.update({ status: 'approuvé' }));
+                showNotification('Congé approuvé');
+                // Mettre à jour solde (simplifié)
+            });
+        }
+
+        function generateLeaveReport() {
+            // Générer état global (ex: compter congés par employé)
+            showNotification('État global généré (console.log pour démo)');
+            console.log('Rapport congés');
+        }
+
+        function loadLeaves() {
+            const tableBody = document.querySelector('#leavesTable tbody');
+            tableBody.innerHTML = '';
+            db.collection('leaves').get().then(snapshot => {
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${data.matricule}</td><td>${data.start}</td><td>${data.end}</td><td>${data.status}</td><td>${data.solde}</td>`;
+                    tableBody.appendChild(tr);
+                });
+            });
+        }
+
+        // Performances
+        function addPerformance() {
+            if (userRole !== 'manager') return showNotification('Accès refusé');
+            const matricule = document.getElementById('perfMatricule').value;
+            const semester = document.getElementById('semester').value;
+            const note = parseFloat(document.getElementById('note').value);
+            db.collection('performance').add({ matricule, semester, note }).then(() => {
+                showNotification('Performance enregistrée');
+                loadPerformance();
+            });
+        }
+
+        function loadPerformance() {
+            const tableBody = document.querySelector('#performanceTable tbody');
+            tableBody.innerHTML = '';
+            db.collection('performance').get().then(snapshot => {
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${data.matricule}</td><td>${data.semester}</td><td>${data.note}</td>`;
+                    tableBody.appendChild(tr);
+                });
+            });
+        }
+
+        // Import/Export Excel avec SheetJS
+        function exportToExcel(collection) {
+            db.collection(collection).get().then(snapshot => {
+                const data = snapshot.docs.map(doc => doc.data());
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, collection);
+                XLSX.writeFile(wb, `${collection}.xlsx`);
+            });
+        }
+
+        function importFromExcel(collection) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
+                const ws = wb.Sheets[wb.SheetNames[0]];
+                const json = XLSX.utils.sheet_to_json(ws);
+                json.forEach(item => {
+                    if (collection === 'employees') {
+                        db.collection(collection).doc(item.matricule).set(item);
+                    } else {
+                        db.collection(collection).add(item);
+                    }
+                });
+                showNotification('Données importées');
+                // Recharger la table correspondante
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Notifications simples
+        function showNotification(message) {
+            const notif = document.createElement('div');
+            notif.className = 'alert alert-info';
+            notif.innerText = message;
+            document.getElementById('notifications').appendChild(notif);
+            setTimeout(() => notif.remove(), 5000);
+        }
+
+        // Fonction édition exemple
+        function editEmployee(matricule) {
+            db.collection('employees').doc(matricule).get().then(doc => {
+                document.getElementById('matricule').value = matricule;
+                document.getElementById('name').value = doc.data().name;
+            });
+        }
+
+        // TODO: Implémenter solde congés, notifications push, etc. pour version complète
+    </script>
+</body>
+</html>
